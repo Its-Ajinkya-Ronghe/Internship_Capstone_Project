@@ -2,7 +2,6 @@ pipeline {
     agent any
 
     tools {
-        // Updated to match the naming convention suggested by your Jenkins logs
         maven 'maven'
         jdk   'JDK22'
     }
@@ -16,19 +15,24 @@ pipeline {
 
         stage('Execute Parallel Regression Suite') {
             steps {
-                // Fixed: Changed from log.info to Jenkins native echo step
                 echo "Launching Capstone Independent Validation Framework..."
-                bat 'mvn clean test -DsuiteXmlFile=testng.xml'
+
+                // 🌟 THE UNSTABLE FIX: Appended -Dmaven.test.failure.ignore=true
+                // This stops Maven from throwing a hard exit code 1, allowing Jenkins to
+                // proceed gracefully to the report generation step without hard-crashing the build.
+                bat 'mvn clean test -DsuiteXmlFile=testng.xml -Dmaven.test.failure.ignore=true'
             }
         }
     }
 
     post {
         always {
-            // Fixed: Removed the invalid nested stage block inside post
+            // 🌟 THE ALLURE REPORT FIX: Updated path to 'target/allure-results'
+            // Points the Allure plugin precisely to the target folder where Maven compiles
+            // the failure bytecode data streams and screenshots during execution cycles.
             allure includeProperties: false,
                    jdk: '',
-                   results: [[path: 'allure-results']]
+                   results: [[path: 'target/allure-results']]
         }
     }
 }

@@ -2,23 +2,22 @@ pipeline {
     agent any
 
     tools {
-        // Points directly to the system engines we registered in Step 2
-        maven 'Maven_3.x'
-        jdk   'Java_22'
+        // Updated to match the naming convention suggested by your Jenkins logs
+        maven 'maven'
+        jdk   'JDK22'
     }
 
     stages {
         stage('Checkout Source Code') {
             steps {
-                // Pulls the latest test framework updates from your code repository
                 checkout scm
             }
         }
 
         stage('Execute Parallel Regression Suite') {
             steps {
-                log.info "Launching Capstone Independent Validation Framework..."
-                // Cleans old targets and fires your TestNG parallel suite runner XML execution block
+                // Fixed: Changed from log.info to Jenkins native echo step
+                echo "Launching Capstone Independent Validation Framework..."
                 bat 'mvn clean test -DsuiteXmlFile=testng.xml'
             }
         }
@@ -26,14 +25,10 @@ pipeline {
 
     post {
         always {
-            stage('Generate Reporting Artifacts') {
-                steps {
-                    // Automatically collects test results and builds an interactive Allure report dashboard
-                    allure includeProperties: false,
-                           jdk: '',
-                           results: [[path: 'allure-results']]
-                }
-            }
+            // Fixed: Removed the invalid nested stage block inside post
+            allure includeProperties: false,
+                   jdk: '',
+                   results: [[path: 'allure-results']]
         }
     }
 }

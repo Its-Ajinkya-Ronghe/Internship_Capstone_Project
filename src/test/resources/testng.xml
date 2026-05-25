@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE suite SYSTEM "https://testng.org/testng-1.0.dtd">
+<suite name="Capstone Independent Validation System Suite" parallel="classes" thread-count="4" verbose="2">
+
+    <listeners>
+        <listener class-name="listeners.TestListener"/>
+    </listeners>
+
+    <test name="Component and Hybrid E2E Synchronisation Cycles">
+        <classes>
+            <class name="com.expandtesting.notes.tests.ui.UITest"/>
+
+            <class name="com.expandtesting.notes.tests.api.APITest"/>
+
+            <class name="com.expandtesting.notes.tests.e2e.E2ETest"/>
+
+            <class name="com.expandtesting.notes.tests.negative.NegativeTest"/>
+        </classes>
+    </test>
+
+</suite>

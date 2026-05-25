@@ -9,7 +9,6 @@ import java.time.Duration;
 
 public class BaseTest {
 
-    // ThreadLocal manages isolated driver instances for safe parallel execution
     private static final ThreadLocal<WebDriver> driver = new ThreadLocal<>();
 
     public WebDriver getDriver() {
@@ -21,28 +20,18 @@ public class BaseTest {
         ChromeOptions options = new ChromeOptions();
         options.addArguments("--start-maximized");
         options.addArguments("--disable-notifications");
+        // Prevents renderer from being killed on slow networks
+        options.addArguments("--disable-renderer-backgrounding");
+        options.addArguments("--disable-backgrounding-occluded-windows");
 
         WebDriver rawDriver = new ChromeDriver(options);
 
-        // ✅ CRITICAL FIX: implicitWait REMOVED.
-        //
-        // implicitWait and FluentWait/WebDriverWait must NEVER coexist.
-        // When both are active, Selenium merges their timeouts in undefined ways:
-        //   - FluentWait polling gets disrupted by the implicit poll underneath
-        //   - A "not found" result from FluentWait can get delayed by implicitWait
-        //     before the exception is thrown, causing the 5s FluentWait to actually
-        //     block for 5s (implicit) + 5s (fluent) = 10s before failing
-        //   - Worse: element-not-found conditions inside until() lambdas get swallowed
-        //     by implicitWait retries, breaking negative checks entirely
-        //
-        // Our WaitUtils uses FluentWait with explicit per-call timeouts.
-        // That is the ONLY wait strategy in use — no implicit wait needed.
-        rawDriver.manage().timeouts().pageLoadTimeout(Duration.ofSeconds(30));  // ✔ CORRECT
+        // No implicitWait — conflicts with FluentWait in WaitUtils
+        // pageLoad raised to 60s — practice.expandtesting.com can be slow
+        rawDriver.manage().timeouts().pageLoadTimeout(Duration.ofSeconds(60));
         rawDriver.manage().timeouts().scriptTimeout(Duration.ofSeconds(30));
 
         driver.set(rawDriver);
-
-        // Navigate to login page before every test row
         getDriver().get("https://practice.expandtesting.com/notes/app/login");
     }
 

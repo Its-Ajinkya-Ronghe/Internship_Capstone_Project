@@ -25,7 +25,6 @@ public class E2ETest extends BaseTest {
     @DataProvider(name = "E2EExcelData")
     public Object[][] getE2EData() {
         String excelPath = System.getProperty("user.dir") + "/src/test/resources/TestData.xlsx";
-        // Reads parameter matrices dynamically from the tab named 'E2EData'
         return ExcelReader.getSheetData(excelPath, "E2ETest");
     }
 
@@ -73,39 +72,8 @@ public class E2ETest extends BaseTest {
             Assert.assertEquals(backendDesc.trim(), uiDescription.trim(), "UI to API verification failed: Description mismatch.");
 
         }
-//        else if (testCaseId.equals("TC-E2E-02")) {
-//            // 🔒 TC-E2E-02: REVERSE SYNC - NOTE DELETION EXPOSURE (API -> UI)
-//            String notePayload = String.format("{\"title\":\"%s\",\"description\":\"%s\",\"category\":\"%s\"}",
-//                    uiTitle, uiDescription, uiCategory);
-//
-//            Response createResp = RestAssured.given()
-//                    .spec(BaseAPI.requestSpec)
-//                    .header("x-auth-token", BaseAPI.authToken)
-//                    .body(notePayload)
-//                    .post("/notes");
-//
-//            String noteId = createResp.jsonPath().getString("data.id");
-//
-//            getDriver().navigate().refresh();
-//
-//            Assert.assertTrue(noteModal.isNoteVisibleByTitle(uiTitle),
-//                    "E2E Test Setup Failure: Pre-requisite note element was not displayed on the dashboard workspace layer.");
-//
-//            RestAssured.given()
-//                    .spec(BaseAPI.requestSpec)
-//                    .header("x-auth-token", BaseAPI.authToken)
-//                    .delete("/notes/" + noteId)
-//                    .then()
-//                    .statusCode(200);
-//
-//            // Verifies visibility WITHOUT refreshing browser frame context to expose BUG-002
-//            boolean isNoteStillPresent = noteModal.isNoteVisibleByTitle(uiTitle);
-//            Assert.assertFalse(isNoteStillPresent,
-//                    "BUG-002: Note deleted via API remains visible on the UI Dashboard layout (Dynamic Sync/Ghost Data Failure).");
-//
-//        }
-        else if (testCaseId.equals("TC-E2E-02")) {
-            // 🔒 TC-E2E-02: REVERSE SYNC - NOTE DELETION EXPOSURE (API -> UI) [cite: 53]
+        else if (testCaseId.equals("Topic-E2E-02") || testCaseId.equals("TC-E2E-02")) {
+            // 🔒 TC-E2E-02: REVERSE SYNC - NOTE DELETION EXPOSURE (API -> UI)
             String notePayload = String.format("{\"title\":\"%s\",\"description\":\"%s\",\"category\":\"%s\"}",
                     uiTitle, uiDescription, uiCategory);
 
@@ -129,24 +97,13 @@ public class E2ETest extends BaseTest {
                     .then()
                     .statusCode(200);
 
-            // Verifies visibility WITHOUT refreshing browser frame context to expose BUG-002 [cite: 28, 48]
+            // Verifies visibility WITHOUT refreshing browser frame context to expose BUG-002
             boolean isNoteStillPresent = noteModal.isNoteVisibleByTitle(uiTitle);
 
-            try {
-                Assert.assertFalse(isNoteStillPresent,
-                        "BUG-002: Note deleted via API remains visible on the UI Dashboard layout (Dynamic Sync/Ghost Data Failure).");
-            } catch (AssertionError e) {
-                // 🌟 CI/CD PIPELINE BYPASS SHIELD [cite: 142, 145]
-                // Intercepts the failure, documents it cleanly, and prevents the engine from hard-crashing Jenkins
-                log.warn("====================================================================================");
-                log.warn("⚠️ DETECTED ACTIVE APPLICATION DEFECT: " + e.getMessage());
-                log.warn("Defect ID Reference: BUG-002 | Severity: High | Priority: P2 [cite: 78, 85]");
-                log.warn("Context: App does not support socket streaming; web UI leaves ghost cards until manual reload.");
-                log.warn("Bypassing crash to maintain green execution pipeline status metrics on Jenkins.");
-                log.warn("====================================================================================");
-            }
+            // Hard failure assertion: Will stop execution and fail the build if note is still present
+            Assert.assertFalse(isNoteStillPresent,
+                    "BUG-002: Note deleted via API remains visible on the UI Dashboard layout (Dynamic Sync/Ghost Data Failure).");
         }
-
         else if (testCaseId.equals("TC-E2E-03")) {
             // =================================================================
             // 📊 TC-E2E-03: VALIDATE MULTIPLE UI NOTES IN API (STABLE BATCH)
@@ -157,19 +114,10 @@ public class E2ETest extends BaseTest {
 
             for (int i = 0; i < titles.length; i++) {
                 log.info("Batch producing UI note index row item [" + i + "]: " + titles[i]);
-
-                // 1. Submit the note form fields completely
                 noteModal.createNewNote(categories[i].trim(), titles[i].trim(), descriptions[i].trim());
-
-                // 🌟 THE CRITICAL STABILITY FIX: Give the frontend app layer
-                // a dedicated window to close the pop-up and paint the new grid card
                 Thread.sleep(2000);
-
-                // Alternative check if you have a loader/backdrop locator:
-                // WaitUtils.waitForElementToBeInvisibile(driver, By.className("modal-backdrop"), 5);
             }
 
-            // 2. Fire backend snapshot query to confirm presence of all elements
             Response multiResponse = RestAssured.given()
                     .spec(BaseAPI.requestSpec)
                     .header("x-auth-token", BaseAPI.authToken)
@@ -181,13 +129,11 @@ public class E2ETest extends BaseTest {
                 String fetchedTitle = multiResponse.jsonPath().getString("data.find { it.title.trim() == '" + targetTitle.trim() + "' }.title");
                 Assert.assertNotNull(fetchedTitle, "Batch Synchronization Failure: Target title [" + targetTitle + "] is missing from API database cluster registry.");
             }
-        } else if (testCaseId.equals("TC-E2E-04")) {
+        }
+        else if (testCaseId.equals("TC-E2E-04")) {
             // 🔒 TC-E2E-04: UI-DRIVEN HYBRID SYNC COMPLETE 5-STEP PIPELINE
-
-            // Step 2: Create Note (UI) [Step 1 Login executed globally at top]
             noteModal.createNewNote(uiCategory, uiTitle, uiDescription);
 
-            // Step 3: Validate via API
             Response getResponse = RestAssured.given()
                     .spec(BaseAPI.requestSpec)
                     .header("x-auth-token", BaseAPI.authToken)
@@ -201,7 +147,6 @@ public class E2ETest extends BaseTest {
             Assert.assertNotNull(noteId, "API Verification Error: Note created via UI was not found in the backend database.");
             Assert.assertEquals(backendTitle.trim(), uiTitle.trim(), "API Verification Error: Title mismatch on backend.");
 
-            // Step 4: Delete via API
             RestAssured.given()
                     .spec(BaseAPI.requestSpec)
                     .header("x-auth-token", BaseAPI.authToken)
@@ -209,15 +154,73 @@ public class E2ETest extends BaseTest {
                     .then()
                     .statusCode(200);
 
-            // Step 5: Refresh the page and Verify UI
             getDriver().navigate().refresh();
-            Thread.sleep(2000); // UI frame transition buffer hold
+            Thread.sleep(2000);
 
             boolean isNoteStillPresent = noteModal.isNoteVisibleByTitle(uiTitle);
             Assert.assertFalse(isNoteStillPresent,
                     "Sync Error: Note was deleted via the backend API and page refreshed, but the element is still visible on the UI dashboard!");
 
-        } else {
+        }
+        else if (testCaseId.equals("TC-E2E-05")) {
+            // 🔒 TC-E2E-05: API -> UI CREATION SYNC VERIFICATION
+            String notePayload = String.format("{\"title\":\"%s\",\"description\":\"%s\",\"category\":\"%s\"}",
+                    uiTitle, uiDescription, uiCategory);
+
+            Response createResp = RestAssured.given()
+                    .spec(BaseAPI.requestSpec)
+                    .header("x-auth-token", BaseAPI.authToken)
+                    .body(notePayload)
+                    .post("/notes");
+
+            Assert.assertEquals(createResp.getStatusCode(), 200, "API Note pre-requisite creation failed.");
+
+            // Verify visibility instantly WITHOUT refreshing browser frame context to expose BUG-005
+            boolean isNoteInstantlyVisible = noteModal.isNoteVisibleByTitle(uiTitle);
+
+            // Hard failure assertion: Will stop execution and fail the build if note is not visible
+            Assert.assertTrue(isNoteInstantlyVisible,
+                    "BUG-005: Note created via API POST does not appear instantly on the UI layout grid (Dynamic Sync Failure).");
+        }
+        else if (testCaseId.equals("TC-E2E-06")) {
+            // 🔒 TC-E2E-06: API -> UI UPDATE SYNC VERIFICATION
+            String originalTitle = uiTitle;
+            String updatedTitle = uiTitle + " - API Updated String";
+
+            String initPayload = String.format("{\"title\":\"%s\",\"description\":\"%s\",\"category\":\"%s\"}",
+                    originalTitle, uiDescription, uiCategory);
+
+            Response createResp = RestAssured.given()
+                    .spec(BaseAPI.requestSpec)
+                    .header("x-auth-token", BaseAPI.authToken)
+                    .body(initPayload)
+                    .post("/notes");
+
+            String noteId = createResp.jsonPath().getString("data.id");
+
+            getDriver().navigate().refresh();
+            Thread.sleep(2000);
+            Assert.assertTrue(noteModal.isNoteVisibleByTitle(originalTitle), "Pre-requisite note card failed to render on UI.");
+
+            String modPayload = String.format("{\"title\":\"%s\",\"description\":\"%s\",\"category\":\"%s\"}",
+                    updatedTitle, uiDescription, uiCategory);
+
+            RestAssured.given()
+                    .spec(BaseAPI.requestSpec)
+                    .header("x-auth-token", BaseAPI.authToken)
+                    .body(modPayload)
+                    .put("/notes/" + noteId)
+                    .then()
+                    .statusCode(200);
+
+            // Verify if modified title reflects on screen WITHOUT refreshing browser frame context to expose BUG-006
+            boolean isUpdatedTitleVisible = noteModal.isNoteVisibleByTitle(updatedTitle);
+
+            // Hard failure assertion: Will stop execution and fail the build if update is not visible
+            Assert.assertTrue(isUpdatedTitleVisible,
+                    "BUG-006: Note updates pushed via API PUT do not reflect dynamically on the UI Dashboard layout.");
+        }
+        else {
             // 🛑 CATCH-ALL ARCHITECTURE GUARD
             Assert.fail("Automation Architecture Alert: No execution routing logic defined for Test Case ID: " + testCaseId);
         }

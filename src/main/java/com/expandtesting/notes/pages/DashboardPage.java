@@ -4,45 +4,24 @@ import com.expandtesting.notes.utils.WaitUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.openqa.selenium.*;
-import org.openqa.selenium.support.ui.ExpectedConditions;
 
-/**
- * DashboardPage — interactions with the main notes grid and navigation controls.
- *
- * Reliability improvements over the original:
- *  - clickDeleteNoteIcon() waits for the confirmation modal to appear before clicking
- *    the confirm button, and waits for it to disappear afterwards.
- *  - clickEditNoteIcon() waits for the edit modal to appear before returning,
- *    so the caller can immediately fill fields without sleeping.
- *  - updateNoteDetails() waits for the modal to close after saving.
- *  - filterNotesByCategory() waits for the filter to actually take effect (DOM
- *    updates to reflect the filtered state) before returning.
- *  - All Thread.sleep() calls removed.
- */
 public class DashboardPage {
 
     private final WebDriver driver;
     private static final Logger log = LogManager.getLogger(DashboardPage.class);
 
-    // ------------------------------------------------------------------
     // Locators
-    // ------------------------------------------------------------------
-    private final By welcomeMessageHeader = By.xpath("//h1[@data-testid='user-profile-title']");
-    private final By logOutButton         = By.xpath("//button[@data-testid='logout-button']");
-    private final By deleteAccountButton  = By.xpath("//button[@data-testid='delete-account-button']");
-    private final By editTitleInput       = By.id("title");
-    private final By editDescriptionInput = By.id("description");
-    private final By saveChangesButton    = By.xpath("//button[@data-testid='note-submit']");
+    private final By welcomeMessageHeader  = By.xpath("//h1[@data-testid='user-profile-title']");
+    private final By logOutButton          = By.xpath("//button[@data-testid='logout-button']");
+    private final By deleteAccountButton   = By.xpath("//button[@data-testid='delete-account-button']");
+    private final By editTitleInput        = By.id("title");
+    private final By editDescriptionInput  = By.id("description");
+    private final By saveChangesButton     = By.xpath("//button[@data-testid='note-submit']");
     private final By modalConfirmDeleteBtn = By.xpath("//button[@data-testid='note-delete-confirm']");
-    private final By allNoteTitles        = By.xpath("//*[@data-testid='note-card-title']");
 
     public DashboardPage(WebDriver driver) {
         this.driver = driver;
     }
-
-    // ------------------------------------------------------------------
-    // Public assertions / queries
-    // ------------------------------------------------------------------
 
     public boolean isWelcomeHeaderDisplayed() {
         return WaitUtils.waitForElementToBeVisible(driver, welcomeMessageHeader, 10).isDisplayed();
@@ -53,69 +32,108 @@ public class DashboardPage {
     // ------------------------------------------------------------------
 
     /**
-     * Click the edit (pencil) icon on the note card that matches {@code noteTitle},
-     * then waits for the edit modal to fully appear so the caller can fill fields immediately.
+     * Click the edit icon and wait for the edit modal's title field to be
+     * visible and clearable before returning.
+     *
+     * Fix for TC-UI-06 AssertionError:
+     *   waitForModalToAppear() was using a CSS selector that doesn't match
+     *   this app's modal structure (.modal.show / [role=dialog][aria-modal=true]).
+     *   The modal opened but the wait timed out or resolved too early, so
+     *   updateNoteDetails() started typing into fields that weren't ready yet —
+     *   the title field still held the old value and the save registered it
+     *   as-is, so the updated title never appeared on the dashboard.
+     *
+     *   Fix: wait directly for the title INPUT inside the edit modal to be
+     *   visible — that is the exact field updateNoteDetails() writes to first,
+     *   and its visibility proves the modal is fully open and interactive.
      */
     public void clickEditNoteIcon(String noteTitle) {
         log.info("Clicking edit icon for note: '{}'", noteTitle);
-        By editIcon = noteCardActionLocator(noteTitle, "note-edit");
+        By editIcon = noteCardActionLocator(noteTitle, "note-title");
         executeSafeAction(() -> clickElementRobustly(editIcon), "Edit Icon: " + noteTitle);
 
-        // Wait for the edit modal to appear — replaces the Thread.sleep(1500) that followed
-        WaitUtils.waitForModalToAppear(driver, 10);
-        log.info("Edit modal open for note: '{}'", noteTitle);
+        // Wait directly for the title input inside the edit modal —
+        // replaces waitForModalToAppear() which was failing on this app's modal CSS
+        WaitUtils.waitForElementToBeVisible(driver, editTitleInput, 10);
+        log.info("Edit modal open — title field visible and ready.");
     }
 
     /**
-     * Click the delete (trash) icon on the matching note card, wait for the confirmation
-     * dialog to appear, confirm deletion, then wait for the modal to fully close.
+     * Fill the edit modal fields and save.
+     * Clears each field explicitly and verifies the title was accepted
+     * before clicking save — guards against React controlled inputs that
+     * silently reject keystrokes when the component isn't fully mounted.
+     */
+    public void updateNoteDetails(String newTitle, String newDescription) {
+        log.info("Updating note — newTitle='{}'", newTitle);
+
+        // Title field: clear + type + verify value was accepted
+        WebElement titleField = WaitUtils.waitForElementToBeVisible(driver, editTitleInput, 5);
+        titleField.clear();
+        titleField.sendKeys(newTitle);
+
+        // Verify the field accepted the input — retry via JS if it didn't
+        String actualTitle = titleField.getAttribute("value");
+        if (actualTitle == null || !actualTitle.equals(newTitle)) {
+            log.warn("Title field value mismatch after typing. Expected='{}', actual='{}'. Retrying via JS.", newTitle, actualTitle);
+            ((JavascriptExecutor) driver).executeScript(
+                    "arguments[0].value='';" +
+                            "arguments[0].value='" + escapeJs(newTitle) + "';" +
+                            "arguments[0].dispatchEvent(new Event('input'));" +
+                            "arguments[0].dispatchEvent(new Event('change'));",
+                    titleField
+            );
+        }
+
+        // Description field
+        WebElement descField = WaitUtils.waitForElementToBeVisible(driver, editDescriptionInput, 5);
+        descField.clear();
+        descField.sendKeys(newDescription);
+
+        // Save and wait for modal to fully close
+        clickElementRobustly(saveChangesButton);
+        WaitUtils.waitForModalToDisappear(driver, 10);
+        log.info("Note update saved, modal closed.");
+    }
+
+    /**
+     * Click delete icon → wait for confirm button → JS click confirm →
+     * wait for modal to fully close.
+     *
+     * JS click used on confirm button because Bootstrap's modal fade animation
+     * can still be running when the button becomes "clickable" in Selenium's
+     * eyes — standard element.click() hits the animating backdrop instead.
      */
     public void clickDeleteNoteIcon(String noteTitle) {
         log.info("Clicking delete icon for note: '{}'", noteTitle);
         By deleteIcon = noteCardActionLocator(noteTitle, "note-delete");
         executeSafeAction(() -> clickElementRobustly(deleteIcon), "Delete Icon: " + noteTitle);
 
-        // Wait for the confirmation modal to be clickable, not just visible
-        WaitUtils.waitForElementToBeClickable(driver, modalConfirmDeleteBtn, 10);
-        log.info("Delete confirmation modal appeared.");
+        // Wait for confirm button to be visible in DOM
+        WebElement confirmBtn = WaitUtils.waitForElementToBeVisible(driver, modalConfirmDeleteBtn, 10);
+        log.info("Delete confirmation dialog appeared.");
 
-        executeSafeAction(() -> clickElementRobustly(modalConfirmDeleteBtn), "Confirm Delete");
+        // Wait for modal animation to finish (.modal.show = Bootstrap fade complete)
+        By modalFullyOpen = By.cssSelector(".modal.show, .modal.fade.show");
+        try {
+            WaitUtils.waitForElementToBeVisible(driver, modalFullyOpen, 5);
+            log.info("Modal animation complete.");
+        } catch (TimeoutException te) {
+            log.warn("Modal .show class not detected — proceeding with JS click anyway.");
+        }
 
-        // Wait for the modal and backdrop to clear — replaces Thread.sleep(1500)
+        // JS click bypasses any remaining animation overlay
+        ((JavascriptExecutor) driver).executeScript("arguments[0].click();", confirmBtn);
+
         WaitUtils.waitForModalToDisappear(driver, 10);
         log.info("Delete confirmed and modal closed.");
     }
 
     /**
-     * Fill the edit-modal fields with new values and save.
-     * Waits for the modal to close before returning so the caller can assert immediately.
-     */
-    public void updateNoteDetails(String newTitle, String newDescription) {
-        log.info("Updating note — newTitle='{}'", newTitle);
-
-        WebElement titleField = WaitUtils.waitForElementToBeVisible(driver, editTitleInput, 5);
-        titleField.clear();
-        titleField.sendKeys(newTitle);
-
-        WebElement descField = WaitUtils.waitForElementToBeVisible(driver, editDescriptionInput, 5);
-        descField.clear();
-        descField.sendKeys(newDescription);
-
-        clickElementRobustly(saveChangesButton);
-
-        // Wait for the modal to disappear after saving — replaces any post-call sleep
-        WaitUtils.waitForModalToDisappear(driver, 10);
-        log.info("Note update saved, modal closed.");
-    }
-
-    /**
-     * Click a category filter tab and wait for the note grid to reflect the filter
-     * before returning, so the caller's assertion sees the filtered state.
-     *
-     * @param categoryName the display name of the category (e.g. "Home", "Work")
+     * Click a category filter tab and wait for the active-filter DOM marker
+     * before returning so the caller's assertion sees the filtered state.
      */
     public void filterNotesByCategory(String categoryName) {
-        // Normalise to Title-case to match data-testid convention (e.g. "home" → "Home")
         String normalised = categoryName.substring(0, 1).toUpperCase()
                 + categoryName.substring(1).toLowerCase();
         By filterLocator = By.xpath("//*[@data-testid='category-" + normalised.toLowerCase() + "']");
@@ -123,20 +141,15 @@ public class DashboardPage {
         log.info("Applying category filter: '{}'", normalised);
         executeSafeAction(() -> clickElementRobustly(filterLocator), "Filter: " + normalised);
 
-        // Wait for the selected filter tab to carry an "active" attribute/class so we know
-        // the DOM has reacted to the click before the caller starts asserting card visibility.
         By activeFilterLocator = By.xpath(
                 "//*[@data-testid='category-" + normalised.toLowerCase() + "' and " +
                         "(contains(@class,'active') or @aria-selected='true' or @aria-current='true')]"
         );
         try {
             WaitUtils.waitForElementToBeVisible(driver, activeFilterLocator, 5);
-            log.info("Category filter '{}' confirmed active in DOM.", normalised);
+            log.info("Category filter '{}' confirmed active.", normalised);
         } catch (TimeoutException te) {
-            // The active marker selector may not match this app's markup — log a warning
-            // but do NOT fail here; the actual note-visibility assertion will catch it.
-            log.warn("Active filter marker not detected for '{}'. Continuing — " +
-                    "assertion will confirm filter result.", normalised);
+            log.warn("Active filter marker not detected for '{}'. Continuing.", normalised);
         }
     }
 
@@ -157,11 +170,6 @@ public class DashboardPage {
     // Private helpers
     // ------------------------------------------------------------------
 
-    /**
-     * Build a note-card-scoped action button locator.
-     * Scopes to the specific card by title so it never clicks the wrong button
-     * when multiple cards are on screen.
-     */
     private By noteCardActionLocator(String noteTitle, String buttonTestId) {
         return By.xpath(String.format(
                 "//*[@data-testid='note-card-title' and normalize-space(text())='%s']" +
@@ -171,10 +179,6 @@ public class DashboardPage {
         ));
     }
 
-    /**
-     * Click with an ElementClickInterceptedException fallback to JS.
-     * Covers ad overlays and partially-dismissed modal backdrops.
-     */
     private void clickElementRobustly(By locator) {
         WebElement element = WaitUtils.waitForElementToBeClickable(driver, locator, 10);
         try {
@@ -185,10 +189,6 @@ public class DashboardPage {
         }
     }
 
-    /**
-     * Retry wrapper for StaleElementReferenceException — re-runs the action up to
-     * 3 times with a short back-off between attempts.
-     */
     private void executeSafeAction(Runnable action, String context) {
         for (int attempt = 1; attempt <= 3; attempt++) {
             try {
@@ -200,8 +200,14 @@ public class DashboardPage {
                     throw e;
                 }
                 log.warn("Stale element on attempt {} for '{}'. Retrying...", attempt, context);
-                try { Thread.sleep(300); } catch (InterruptedException ignored) { Thread.currentThread().interrupt(); }
+                try { Thread.sleep(300); } catch (InterruptedException ignored) {
+                    Thread.currentThread().interrupt();
+                }
             }
         }
+    }
+
+    private String escapeJs(String text) {
+        return text == null ? "" : text.replace("'", "\\'");
     }
 }

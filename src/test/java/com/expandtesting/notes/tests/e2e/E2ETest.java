@@ -154,13 +154,16 @@ public class E2ETest extends BaseTest {
                     .then()
                     .statusCode(200);
 
-            getDriver().navigate().refresh();
-            Thread.sleep(2000);
+            // 🌟 THE FIX: Switch from standard blocking navigate().refresh() to non-blocking JS reload
+            log.info("Executing optimized JavaScript window refresh to enforce cross-layer synchronization.");
+            ((org.openqa.selenium.JavascriptExecutor) getDriver()).executeScript("history.go(0);");
+
+            // Allow a clean 3-second buffer for the elements to re-render smoothly
+            Thread.sleep(3000);
 
             boolean isNoteStillPresent = noteModal.isNoteVisibleByTitle(uiTitle);
             Assert.assertFalse(isNoteStillPresent,
                     "Sync Error: Note was deleted via the backend API and page refreshed, but the element is still visible on the UI dashboard!");
-
         }
         else if (testCaseId.equals("TC-E2E-05")) {
             // 🔒 TC-E2E-05: API -> UI CREATION SYNC VERIFICATION
@@ -202,7 +205,7 @@ public class E2ETest extends BaseTest {
             Thread.sleep(2000);
             Assert.assertTrue(noteModal.isNoteVisibleByTitle(originalTitle), "Pre-requisite note card failed to render on UI.");
 
-            String modPayload = String.format("{\"title\":\"%s\",\"description\":\"%s\",\"category\":\"%s\"}",
+            String modPayload = String.format("{\"title\":\"%s\",\"description\":\"%s\",\"category\":\"%s\",\"completed\":false}",
                     updatedTitle, uiDescription, uiCategory);
 
             RestAssured.given()

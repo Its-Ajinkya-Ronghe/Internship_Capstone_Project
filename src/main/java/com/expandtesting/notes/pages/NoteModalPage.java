@@ -1,27 +1,16 @@
 package com.expandtesting.notes.pages;
 
 import com.expandtesting.notes.utils.WaitUtils;
+import com.expandtesting.notes.utils.AgenticElementHandler; // 🌟 Route to your Agentic Utility
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.openqa.selenium.*;
-import org.openqa.selenium.support.ui.ExpectedConditions;
 import org.openqa.selenium.support.ui.Select;
 
 import java.util.List;
 
 /**
- * NoteModalPage — interactions with the "Add / View Note" modal form.
- *
- * Reliability improvements over the original:
- *  - waitForModalToAppear() before touching any form field, so we never type
- *    into an element that is still animating into view.
- *  - waitForModalToDisappear() after saving, so the caller's next action
- *    (refresh, assert, click) is never blocked by a lingering backdrop.
- *  - isNoteVisibleByTitle() uses a FluentWait retry loop instead of a plain
- *    findElements() scan, eliminating false-negatives caused by async card renders.
- *  - clearAndSendKeys() verifies the field value after typing to catch cases
- *    where React controlled inputs swallow keystrokes.
- *  - All Thread.sleep() calls removed.
+ * NoteModalPage — interactions with the "Add / View Note" modal form protected by Agentic guards.
  */
 public class NoteModalPage {
 
@@ -29,13 +18,13 @@ public class NoteModalPage {
     private static final Logger log = LogManager.getLogger(NoteModalPage.class);
 
     // ------------------------------------------------------------------
-    // Locators
+    // Locators (Unstable primary markers mapped to showcase self-healing fallbacks)
     // ------------------------------------------------------------------
-    private final By addNoteButton    = By.xpath("//button[@data-testid='add-new-note']");
+    private final By addNoteButton    = By.xpath("//button[@id='add-btn-unstable-id']");
     private final By categorySelect   = By.id("category");
     private final By titleInput       = By.id("title");
     private final By descriptionInput = By.id("description");
-    private final By saveButton       = By.xpath("//button[@data-testid='note-submit']");
+    private final By saveButton       = By.xpath("//button[@id='submit-btn-unstable-id']");
     private final By allNoteTitles    = By.xpath("//*[@data-testid='note-card-title']");
 
     public NoteModalPage(WebDriver driver) {
@@ -47,59 +36,59 @@ public class NoteModalPage {
     // ------------------------------------------------------------------
 
     /**
-     * Open the "Add Note" modal, fill every field, and submit.
-     * Waits for the modal to fully appear before touching fields, and waits
-     * for it to fully close before returning — so the caller never has to sleep.
+     * Open the "Add Note" modal, fill every field, and submit via Agentic checkpoints.
      */
     public void createNewNote(String category, String title, String description) {
-        log.info("Creating new note — category='{}', title='{}'", category, title);
+        log.info("Creating new note via Agentic lifecycle layers — category='{}', title='{}'", category, title);
 
-        // 1. Click the trigger button
-        WebElement addBtn = WaitUtils.waitForElementToBeClickable(driver, addNoteButton, 10);
+        // 🌟 AGENTIC LAYER 1: Self-heal the "+ Add Note" button if the locator string changes
+        WebElement addBtn = AgenticElementHandler.findAndHealElement(
+                driver,
+                addNoteButton,    // Primary target
+                "add-new-note",   // Backup data-testid fallback mapping
+                "button"          // Target HTML tag
+        );
         scrollAndClick(addBtn);
 
-        // 2. Wait for the modal form to be fully visible before interacting
+        // Wait for the modal form to be fully visible before interacting
         WaitUtils.waitForModalToAppear(driver, 10);
 
-        // 3. Fill category
+        // Fill category
         WebElement catElement = WaitUtils.waitForElementToBeVisible(driver, categorySelect, 5);
         selectCategory(catElement, category);
 
-        // 4. Fill title — verify the value was accepted (guards against React swallowing keys)
+        // Fill title — verify the value was accepted
         WebElement titleField = WaitUtils.waitForElementToBeVisible(driver, titleInput, 5);
         fillAndVerify(titleField, titleInput, title);
 
-        // 5. Fill description
+        // Fill description
         WebElement descField = WaitUtils.waitForElementToBeVisible(driver, descriptionInput, 5);
         clearAndSendKeys(descField, description);
 
-        // 6. Submit
-        log.info("Submitting note form.");
-        WebElement submitBtn = WaitUtils.waitForElementToBeClickable(driver, saveButton, 5);
+        log.info("Submitting note form utilizing self-healing checkpoints.");
+
+        // 🌟 AGENTIC LAYER 2: Self-heal the modal submission button to guarantee data tracking
+        WebElement submitBtn = AgenticElementHandler.findAndHealElement(
+                driver,
+                saveButton,
+                "note-submit",
+                "button"
+        );
         scrollAndClick(submitBtn);
 
-        // 7. Wait for the modal backdrop to disappear — replaces Thread.sleep(1500)
+        // Wait for the modal backdrop to disappear smoothly
         WaitUtils.waitForModalToDisappear(driver, 10);
         log.info("Note creation complete, modal closed.");
     }
 
     /**
      * Checks whether a note card with the given title is visible on the dashboard.
-     *
-     * Uses FluentWait so transient DOM states (async card renders, stale refs) are
-     * retried automatically — no manual StaleElementReferenceException loops needed.
-     *
-     * @param title the expected note title (case-insensitive substring match)
-     * @return true if found within the wait timeout, false otherwise
      */
     public boolean isNoteVisibleByTitle(String title) {
         log.info("Checking dashboard for note title: '{}'", title.trim());
         try {
-            // Wait until at least one note-card title element is present
             WaitUtils.waitForElementToBeVisible(driver, allNoteTitles, 10);
 
-            // Use FluentWait to keep retrying until the specific title appears
-            // (the list may still be growing if cards render one-by-one)
             WaitUtils.buildWait(driver, 10).until(driver -> {
                 List<WebElement> cards = driver.findElements(allNoteTitles);
                 for (WebElement card : cards) {
@@ -125,10 +114,6 @@ public class NoteModalPage {
 
     /**
      * Inverse of isNoteVisibleByTitle — waits until a title is GONE from the DOM.
-     * Use this right after a delete operation before asserting absence.
-     *
-     * @param title the note title that should no longer be present
-     * @return true if the title disappeared within the timeout
      */
     public boolean waitForNoteToDisappear(String title) {
         log.info("Waiting for note '{}' to disappear from dashboard.", title.trim());
@@ -138,13 +123,13 @@ public class NoteModalPage {
                 for (WebElement card : cards) {
                     try {
                         if (card.getText().trim().equalsIgnoreCase(title.trim())) {
-                            return false; // still there — keep waiting
+                            return false;
                         }
                     } catch (StaleElementReferenceException ignored) {
-                        // Card was removed mid-check — that's what we want
+                        // Element was dropped from DOM mid-loop, which is our target state
                     }
                 }
-                return true; // not found in any card
+                return true;
             });
             log.info("Note '{}' successfully removed from dashboard.", title.trim());
             return true;
@@ -158,10 +143,6 @@ public class NoteModalPage {
     // Private helpers
     // ------------------------------------------------------------------
 
-    /**
-     * Select a category by visible text; fall back to JS value-set if the
-     * Select API fails (e.g. custom-styled dropdowns that block the native select).
-     */
     private void selectCategory(WebElement element, String category) {
         try {
             new Select(element).selectByVisibleText(category);
@@ -175,14 +156,9 @@ public class NoteModalPage {
         }
     }
 
-    /**
-     * Clear, type, and verify — guards against React controlled inputs that
-     * silently reject keystrokes when the component is not fully mounted.
-     */
     private void fillAndVerify(WebElement element, By locator, String text) {
         clearAndSendKeys(element, text);
 
-        // Verify the field accepted the input; re-type once via JS if it didn't
         String actualValue = element.getAttribute("value");
         if (actualValue == null || !actualValue.equals(text)) {
             log.warn("Field value mismatch after typing. Expected='{}', actual='{}'. Retrying via JS.", text, actualValue);
@@ -221,7 +197,6 @@ public class NoteModalPage {
         }
     }
 
-    /** Escape single-quotes so JS string injection doesn't break on apostrophes in titles. */
     private String escapeJs(String text) {
         return text == null ? "" : text.replace("'", "\\'");
     }

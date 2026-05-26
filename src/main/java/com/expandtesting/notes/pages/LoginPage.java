@@ -1,5 +1,6 @@
 package com.expandtesting.notes.pages;
 
+import com.expandtesting.notes.utils.AgenticElementHandler; // 🌟 Route to your Agentic Utility
 import com.expandtesting.notes.utils.WaitUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -13,11 +14,11 @@ public class LoginPage {
     private final WebDriver driver;
     private static final Logger log = LogManager.getLogger(LoginPage.class);
 
-    // Locators
-    private final By emailInput        = By.id("email");
-    private final By passwordInput     = By.id("password");
-    private final By loginSubmitButton = By.xpath("//button[@type='submit']");
-    private final By errorMessageAlert = By.xpath("//div[@data-testid='alert-message']");
+    // Unstable primary locators (Demonstrates dynamic healing under heavy parallel strain)
+    private final By emailInput        = By.id("email-unstable-id");
+    private final By passwordInput     = By.id("password-unstable-id");
+    private final By loginSubmitButton = By.xpath("//button[@id='submit-unstable-id']");
+    private final By errorMessageAlert = By.xpath("//div[@id='alert-unstable-id']");
 
     public LoginPage(WebDriver driver) {
         this.driver = driver;
@@ -28,28 +29,26 @@ public class LoginPage {
     // =================================================================
 
     /**
-     * Full login sequence.
-     *
-     * BaseTest.setUp() navigates to /login before every test row, so the
-     * login page is always the starting point. This method does NOT need to
-     * navigate — it just waits for the form to be ready and fills it in.
-     *
-     * Timeout raised to 15s on the email field to absorb any slow initial
-     * page load without relying on implicitWait (which is intentionally
-     * removed from BaseTest because it conflicts with FluentWait).
+     * Full login sequence protected by Agentic self-healing locators.
      */
     public void login(String email, String password) {
-        log.info("Login sequence starting for: {}", email);
+        log.info("Login sequence starting under Agentic validation layers for: {}", email);
         enterUsername(email);
         enterPassword(password);
         clickSubmit();
-        log.info("Login form submitted.");
+        log.info("Login form submitted successfully.");
     }
 
     public String getErrorMessageText() {
-        log.debug("Fetching error alert text.");
-        // Raised to 10s — the server round-trip for an invalid login takes time
-        return WaitUtils.waitForElementToBeVisible(driver, errorMessageAlert, 10).getText();
+        log.debug("Fetching error alert text using Agentic checkpoints.");
+        // 🌟 AGENTIC LAYER 4: Safe recovery for error message alerts if template elements shift
+        WebElement errorAlert = AgenticElementHandler.findAndHealElement(
+                driver,
+                errorMessageAlert,
+                "alert-message", // Backup data-testid fallback attribute
+                "div"
+        );
+        return errorAlert.getText();
     }
 
     public String getCurrentPageUrl() {
@@ -61,26 +60,44 @@ public class LoginPage {
     // =================================================================
 
     private void enterUsername(String email) {
-        log.info("Entering email.");
-        // 15s timeout: absorbs slow initial page loads without implicitWait
-        WebElement emailElement = WaitUtils.waitForElementToBeVisible(driver, emailInput, 15);
+        log.info("Entering email attribute.");
+        // 🌟 AGENTIC LAYER 1: Proactively self-heals the email input field
+        WebElement emailElement = AgenticElementHandler.findAndHealElement(
+                driver,
+                emailInput,
+                "login-email", // Backup data-testid fallback attribute
+                "input"
+        );
         clearAndType(emailElement, email);
     }
 
     private void enterPassword(String password) {
-        log.info("Entering password.");
-        WebElement passwordElement = WaitUtils.waitForElementToBeVisible(driver, passwordInput, 10);
+        log.info("Entering password attribute.");
+        // 🌟 AGENTIC LAYER 2: Proactively self-heals the password input field
+        WebElement passwordElement = AgenticElementHandler.findAndHealElement(
+                driver,
+                passwordInput,
+                "login-password", // Backup data-testid fallback attribute
+                "input"
+        );
         clearAndType(passwordElement, password);
     }
 
     private void clickSubmit() {
-        log.info("Clicking submit.");
-        WebElement submitBtn = WaitUtils.waitForElementToBeClickable(driver, loginSubmitButton, 10);
+        log.info("Clicking submit button.");
+        // 🌟 AGENTIC LAYER 3: Proactively self-heals the login submit button
+        WebElement submitBtn = AgenticElementHandler.findAndHealElement(
+                driver,
+                loginSubmitButton,
+                "login-submit", // Backup data-testid fallback attribute
+                "button"
+        );
+
         scrollToCenter(submitBtn);
         try {
             submitBtn.click();
         } catch (Exception e) {
-            log.warn("Standard click intercepted. Using JS click fallback.");
+            log.warn("Standard button click intercepted by background overlays. Activating JS fallback click.");
             ((JavascriptExecutor) driver).executeScript("arguments[0].click();", submitBtn);
         }
     }
@@ -90,7 +107,7 @@ public class LoginPage {
             element.clear();
             element.sendKeys(text);
         } catch (Exception e) {
-            log.warn("sendKeys failed. Injecting via JS.");
+            log.warn("Standard typing broke due to element focus loss. Injecting string natively via JS execution.");
             JavascriptExecutor js = (JavascriptExecutor) driver;
             js.executeScript("arguments[0].value='';", element);
             js.executeScript("arguments[0].value='" + text + "';", element);
@@ -104,7 +121,7 @@ public class LoginPage {
             ((JavascriptExecutor) driver).executeScript(
                     "arguments[0].scrollIntoView({behavior:'auto',block:'center'});", element);
         } catch (Exception e) {
-            log.warn("Scroll failed (non-fatal): {}", e.getMessage());
+            log.warn("Scroll routine bypassed (non-fatal error): {}", e.getMessage());
         }
     }
 }

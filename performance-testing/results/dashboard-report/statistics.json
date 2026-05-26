@@ -1,0 +1,50 @@
+{
+  "POST - Create Note Load Target" : {
+    "transaction" : "POST - Create Note Load Target",
+    "sampleCount" : 250,
+    "errorCount" : 0,
+    "errorPct" : 0.0,
+    "meanResTime" : 425.644,
+    "medianResTime" : 364.0,
+    "minResTime" : 309.0,
+    "maxResTime" : 1383.0,
+    "pct1ResTime" : 500.9,
+    "pct2ResTime" : 705.1999999999998,
+    "pct3ResTime" : 1377.49,
+    "throughput" : 16.396668197022365,
+    "receivedKBytesPerSec" : 20.58089296255001,
+    "sentKBytesPerSec" : 2.962288687938611
+  },
+  "Total" : {
+    "transaction" : "Total",
+    "sampleCount" : 300,
+    "errorCount" : 0,
+    "errorPct" : 0.0,
+    "meanResTime" : 423.7433333333332,
+    "medianResTime" : 365.0,
+    "minResTime" : 309.0,
+    "maxResTime" : 1383.0,
+    "pct1ResTime" : 501.90000000000003,
+    "pct2ResTime" : 695.9999999999995,
+    "pct3ResTime" : 1376.97,
+    "throughput" : 17.726305837863386,
+    "receivedKBytesPerSec" : 22.197351025171354,
+    "sentKBytesPerSec" : 3.156344170999764
+  },
+  "POST - Token Generation" : {
+    "transaction" : "POST - Token Generation",
+    "sampleCount" : 50,
+    "errorCount" : 0,
+    "errorPct" : 0.0,
+    "meanResTime" : 414.23999999999984,
+    "medianResTime" : 368.0,
+    "minResTime" : 327.0,
+    "maxResTime" : 975.0,
+    "pct1ResTime" : 576.5999999999999,
+    "pct2ResTime" : 765.999999999999,
+    "pct3ResTime" : 975.0,
+    "throughput" : 4.93339911198816,
+    "receivedKBytesPerSec" : 6.1046959792797235,
+    "sentKBytesPerSec" : 0.8142035643808584
+  }
+}

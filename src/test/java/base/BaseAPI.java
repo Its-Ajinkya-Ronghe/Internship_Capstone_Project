@@ -3,6 +3,8 @@ package base;
 import io.restassured.RestAssured;
 import io.restassured.builder.RequestSpecBuilder;
 import io.restassured.builder.ResponseSpecBuilder;
+import io.restassured.config.HttpClientConfig;
+import io.restassured.config.RestAssuredConfig;
 import io.restassured.http.ContentType;
 import io.restassured.specification.RequestSpecification;
 import io.restassured.specification.ResponseSpecification;
@@ -14,12 +16,19 @@ public class BaseAPI {
     public static String authToken = "";
 
     public static void initializeAPI() {
-        // Points directly to the swagger base documentation path
         RestAssured.baseURI = "https://practice.expandtesting.com/notes/api";
+
+        // 🛠️ NETWORK SESSIONS TIMEOUT BREAKER MATRIX
+        // Prevents RestAssured from waiting indefinitely if connection packets drop
+        RestAssuredConfig timeoutConfig = RestAssuredConfig.config()
+                .httpClient(HttpClientConfig.httpClientConfig()
+                        .setParam("http.connection.timeout", 10000)     // 10s Connection Timeout
+                        .setParam("http.socket.timeout", 10000));       // 10s Data Socket Timeout
 
         requestSpec = new RequestSpecBuilder()
                 .setContentType(ContentType.JSON)
                 .addHeader("Accept", "application/json")
+                .setConfig(timeoutConfig) // Attaching timeouts globally
                 .build();
 
         responseSpec = new ResponseSpecBuilder()
@@ -27,7 +36,6 @@ public class BaseAPI {
                 .build();
     }
 
-    // Static helper to quickly obtain token for subsequent requests
     public static void loginAndSetToken() {
         if (authToken.isEmpty()) {
             initializeAPI();

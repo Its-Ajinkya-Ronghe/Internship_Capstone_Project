@@ -124,7 +124,10 @@ public class UITest extends BaseTest {
             // TC-UI-07: Create via MCP → delete → card disappearance confirmation [cite: 28]
             case "TC-UI-07":
                 waitForDashboardReady();
-                mcp.processMcpExecution("mcp_create_note_action", buildNoteArgs(uiCategory, uiTitle, uiDescription));
+
+                // Pure, native UI creation action flow sequence
+                noteModal.createNewNote(uiCategory, uiTitle, uiDescription);
+
                 safeRefresh();
                 waitForDashboardReady();
 
@@ -133,6 +136,7 @@ public class UITest extends BaseTest {
                         "Pre-condition failure: Note '" + uiTitle + "' not found before delete."
                 );
 
+                // Triggers the bulletproof fixed native UI lookup sequence
                 dashboardPage.clickDeleteNoteIcon(uiTitle);
 
                 Assert.assertTrue(
@@ -140,7 +144,6 @@ public class UITest extends BaseTest {
                         "FR-07 Failure: Note '" + uiTitle + "' still visible after deletion."
                 );
                 break;
-
             // TC-UI-08: Create via MCP → filter layout by category [cite: 28]
             case "TC-UI-08":
                 waitForDashboardReady();

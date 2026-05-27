@@ -9,11 +9,8 @@
     <test name="Component and Hybrid E2E Synchronisation Cycles">
         <classes>
             <class name="com.expandtesting.notes.tests.ui.UITest"/>
-
             <class name="com.expandtesting.notes.tests.api.APITest"/>
-
             <class name="com.expandtesting.notes.tests.e2e.E2ETest"/>
-
             <class name="com.expandtesting.notes.tests.negative.NegativeTest"/>
         </classes>
     </test>

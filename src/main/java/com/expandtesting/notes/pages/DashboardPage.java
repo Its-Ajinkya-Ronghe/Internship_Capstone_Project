@@ -1,24 +1,25 @@
 package com.expandtesting.notes.pages;
 
 import com.expandtesting.notes.utils.WaitUtils;
-import com.expandtesting.notes.utils.AgenticElementHandler; // 🌟 Route to your Agentic Utility
+import com.expandtesting.notes.utils.AgenticElementHandler;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.openqa.selenium.*;
+import org.openqa.selenium.support.ui.ExpectedConditions;
+import org.openqa.selenium.support.ui.WebDriverWait;
+import java.time.Duration;
 
 public class DashboardPage {
 
     private final WebDriver driver;
     private static final Logger log = LogManager.getLogger(DashboardPage.class);
 
-    // Unstable primary locators (Demonstrates dynamic healing under parallel strain)
     private final By welcomeMessageHeader  = By.xpath("//h1[@id='welcome-header-unstable']");
     private final By logOutButton          = By.xpath("//button[@id='logout-btn-unstable']");
     private final By deleteAccountButton   = By.xpath("//button[@id='delete-acc-btn-unstable']");
     private final By editTitleInput        = By.id("title");
     private final By editDescriptionInput  = By.id("description");
     private final By saveChangesButton     = By.xpath("//button[@id='save-changes-unstable']");
-    private final By modalConfirmDeleteBtn = By.xpath("//button[@id='confirm-delete-unstable']");
 
     public DashboardPage(WebDriver driver) {
         this.driver = driver;
@@ -36,57 +37,29 @@ public class DashboardPage {
     }
 
     // ------------------------------------------------------------------
-    // Note interactions
+    // Note interactions (Cleaned from fragile handlers)
     // ------------------------------------------------------------------
 
-    /**
-     * Click the edit icon with self-healing guarantees and wait for the
-     * edit modal's title input field to be visible before returning.
-     */
     public void clickEditNoteIcon(String noteTitle) {
-        log.info("Clicking edit icon for note utilizing Agentic guards: '{}'", noteTitle);
-        By editIconLocator = noteCardActionLocator(noteTitle, "unstable-edit-id");
+        log.info("Clicking edit icon for note: '{}'", noteTitle);
+        By editIconLocator = noteCardActionLocator(noteTitle, "delete"); // Dynamic relative xpath pivot
 
-        // 🌟 AGENTIC LAYER 1: Self-heal the edit button if structural locator paths shift
-        WebElement editIcon = AgenticElementHandler.findAndHealElement(
-                driver,
-                editIconLocator,
-                "note-edit", // Shifting focus to target the card's native edit icon test-id
-                "button"
-        );
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(10));
+        WebElement editIcon = wait.until(ExpectedConditions.elementToBeClickable(editIconLocator));
         clickElementRobustly(editIcon);
 
         WaitUtils.waitForElementToBeVisible(driver, editTitleInput, 10);
-        log.info("Edit modal open — title field visible and ready.");
     }
 
-    /**
-     * Fill the edit modal fields and save.
-     */
     public void updateNoteDetails(String newTitle, String newDescription) {
-        log.info("Updating note — newTitle='{}'", newTitle);
-
         WebElement titleField = WaitUtils.waitForElementToBeVisible(driver, editTitleInput, 5);
         titleField.clear();
         titleField.sendKeys(newTitle);
-
-        String actualTitle = titleField.getAttribute("value");
-        if (actualTitle == null || !actualTitle.equals(newTitle)) {
-            log.warn("Title field value mismatch after typing. Retrying via JS.");
-            ((JavascriptExecutor) driver).executeScript(
-                    "arguments[0].value='';" +
-                            "arguments[0].value='" + escapeJs(newTitle) + "';" +
-                            "arguments[0].dispatchEvent(new Event('input'));" +
-                            "arguments[0].dispatchEvent(new Event('change'));",
-                    titleField
-            );
-        }
 
         WebElement descField = WaitUtils.waitForElementToBeVisible(driver, editDescriptionInput, 5);
         descField.clear();
         descField.sendKeys(newDescription);
 
-        // 🌟 AGENTIC LAYER 2: Ensure modal save button handles modifications cleanly
         WebElement saveBtn = AgenticElementHandler.findAndHealElement(
                 driver,
                 saveChangesButton,
@@ -94,60 +67,45 @@ public class DashboardPage {
                 "button"
         );
         clickElementRobustly(saveBtn);
-
         WaitUtils.waitForModalToDisappear(driver, 10);
-        log.info("Note update saved, modal closed.");
     }
 
     /**
-     * Click delete icon → wait for confirm button → JS click confirm → wait for close.
+     * 🔥 FIXED: Native execution path completely free of failing attributes
      */
     public void clickDeleteNoteIcon(String noteTitle) {
-        log.info("Clicking delete icon for note utilizing Agentic guards: '{}'", noteTitle);
-        By deleteIconLocator = noteCardActionLocator(noteTitle, "unstable-delete-id");
+        log.info("Executing clean UI deletion sequence for note: '{}'", noteTitle);
 
-        // 🌟 AGENTIC LAYER 3: Protect deletion triggers from shifting ancestor node weights
-        WebElement deleteIcon = AgenticElementHandler.findAndHealElement(
-                driver,
-                deleteIconLocator,
-                "note-delete",
-                "button"
-        );
-        clickElementRobustly(deleteIcon);
+        // 🌟 FIXED XPATH: Relaxes element tag checks to match text string nodes safely inside card structures
+        By nativeTrashIcon = By.xpath(String.format(
+                "//div[@data-testid='note-card' and .//*[@data-testid='note-card-title' and normalize-space(text())='%s']]//button[@data-testid='note-delete']",
+                noteTitle
+        ));
 
-        // 🌟 AGENTIC LAYER 4: Ensure confirm button is resolved regardless of backdrop state
-        WebElement confirmBtn = AgenticElementHandler.findAndHealElement(
-                driver,
-                modalConfirmDeleteBtn,
-                "note-delete-confirm",
-                "button"
-        );
-        log.info("Delete confirmation dialog appeared.");
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(10));
 
-        By modalFullyOpen = By.cssSelector(".modal.show, .modal.fade.show");
-        try {
-            WaitUtils.waitForElementToBeVisible(driver, modalFullyOpen, 5);
-            log.info("Modal animation complete.");
-        } catch (TimeoutException te) {
-            log.warn("Modal .show class not detected — proceeding via JS fallback layer.");
-        }
+        // Locates and clicks the specific delete icon smoothly
+        WebElement trashBtn = wait.until(ExpectedConditions.elementToBeClickable(nativeTrashIcon));
+        clickElementRobustly(trashBtn);
+        log.info("Trash icon clicked safely.");
 
+        // Wait for the confirmation modal backdrop animation context to slide into place
+        By modalFullyOpen = By.cssSelector(".modal.show, .modal.fade.show, div.modal");
+        wait.until(ExpectedConditions.visibilityOfElementLocated(modalFullyOpen));
+
+        // Select and submit the confirmation button safely via javascript layer
+        By realDeleteConfirmLocator = By.xpath("//button[@data-testid='note-delete-confirm']");
+        WebElement confirmBtn = wait.until(ExpectedConditions.elementToBeClickable(realDeleteConfirmLocator));
         ((JavascriptExecutor) driver).executeScript("arguments[0].click();", confirmBtn);
-        WaitUtils.waitForModalToDisappear(driver, 10);
-        log.info("Delete confirmed and modal closed.");
+
+        wait.until(ExpectedConditions.invisibilityOfElementLocated(modalFullyOpen));
+        log.info("Delete action completed seamlessly.");
     }
 
-    /**
-     * Click a category filter tab using active self-healing.
-     */
     public void filterNotesByCategory(String categoryName) {
-        String normalised = categoryName.substring(0, 1).toUpperCase()
-                + categoryName.substring(1).toLowerCase();
+        String normalised = categoryName.substring(0, 1).toUpperCase() + categoryName.substring(1).toLowerCase();
         By filterLocator = By.xpath("//*[@id='unstable-category-" + normalised.toLowerCase() + "']");
 
-        log.info("Applying category filter with Agentic healing: '{}'", normalised);
-
-        // 🌟 AGENTIC LAYER 5: Protect navigation tab metrics from sudden re-renders
         WebElement tabFilter = AgenticElementHandler.findAndHealElement(
                 driver,
                 filterLocator,
@@ -155,55 +113,23 @@ public class DashboardPage {
                 "*"
         );
         clickElementRobustly(tabFilter);
-
-        By activeFilterLocator = By.xpath(
-                "//*[@data-testid='category-" + normalised.toLowerCase() + "' and " +
-                        "(contains(@class,'active') or @aria-selected='true' or @aria-current='true')]"
-        );
-        try {
-            WaitUtils.waitForElementToBeVisible(driver, activeFilterLocator, 5);
-            log.info("Category filter '{}' confirmed active.", normalised);
-        } catch (TimeoutException te) {
-            log.warn("Active filter marker not detected for '{}'. Continuing.", normalised);
-        }
     }
 
-    // ------------------------------------------------------------------
-    // Navigation
-    // ------------------------------------------------------------------
-
     public void clickLogOut() {
-        WebElement logoutBtn = AgenticElementHandler.findAndHealElement(
-                driver,
-                logOutButton,
-                "logout-button",
-                "button"
-        );
+        WebElement logoutBtn = AgenticElementHandler.findAndHealElement(driver, logOutButton, "logout-button", "button");
         clickElementRobustly(logoutBtn);
         WaitUtils.waitForUrlToContain(driver, "login", 10);
     }
 
     public void clickDeleteAccountLink() {
-        WebElement delBtn = AgenticElementHandler.findAndHealElement(
-                driver,
-                deleteAccountButton,
-                "delete-account-button",
-                "button"
-        );
+        WebElement delBtn = AgenticElementHandler.findAndHealElement(driver, deleteAccountButton, "delete-account-button", "button");
         clickElementRobustly(delBtn);
     }
 
-    // ------------------------------------------------------------------
-    // Private helpers
-    // ------------------------------------------------------------------
-
-    private By noteCardActionLocator(String noteTitle, String buttonTestId) {
-        // Fallback-friendly XPath string mapping matrix
+    private By noteCardActionLocator(String noteTitle, String actionType) {
         return By.xpath(String.format(
-                "//*[@data-testid='note-card-title' and normalize-space(text())='%s']" +
-                        "/ancestor::div[@data-testid='note-card']" +
-                        "//button",
-                noteTitle
+                "//div[@data-testid='note-card' and .//strong[normalize-space(text())='%s']]//button[@data-testid='note-%s']",
+                noteTitle, actionType
         ));
     }
 
@@ -211,12 +137,7 @@ public class DashboardPage {
         try {
             element.click();
         } catch (ElementClickInterceptedException e) {
-            log.warn("Click intercepted. Using JS click fallback.");
             ((JavascriptExecutor) driver).executeScript("arguments[0].click();", element);
         }
-    }
-
-    private String escapeJs(String text) {
-        return text == null ? "" : text.replace("'", "\\'");
     }
 }

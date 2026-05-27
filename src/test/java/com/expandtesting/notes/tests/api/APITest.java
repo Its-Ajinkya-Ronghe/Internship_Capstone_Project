@@ -1,29 +1,42 @@
 package com.expandtesting.notes.tests.api;
 
 import base.BaseAPI;
+import com.expandtesting.notes.utils.ConfigReader;
 import com.expandtesting.notes.utils.ExcelReader;
 import io.restassured.RestAssured;
+import io.restassured.module.jsv.JsonSchemaValidator;
 import io.restassured.response.Response;
 import org.hamcrest.Matchers;
 import org.testng.Assert;
 import org.testng.annotations.BeforeClass;
 import org.testng.annotations.DataProvider;
 import org.testng.annotations.Test;
+
+import java.io.File;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 /**
  * APITest — Data-driven API verification suite.
- * Optimized to satisfy Section 3.5 Performance SLAs and standardized tool mappings.
+ * Includes JSON Schema Validation (Section 2.3) and Performance SLAs (Section 3.5).
  */
 public class APITest extends BaseAPI {
 
-    private static final org.apache.logging.log4j.Logger log = org.apache.logging.log4j.LogManager.getLogger(APITest.class);
-    private static final long PERFORMANCE_SLA_MS = 2000L; // ⏱️ Section 3.5 SLA Boundary Constraint
+    private static final org.apache.logging.log4j.Logger log =
+            org.apache.logging.log4j.LogManager.getLogger(APITest.class);
+
+    private static final long PERFORMANCE_SLA_MS =
+            Long.parseLong(ConfigReader.getProperty("api.max.response.time.ms"));
+
+    // Schema file paths
+    private static final String LOGIN_SCHEMA  =
+            "src/test/resources/schemas/login_response_schema.json";
+    private static final String NOTES_SCHEMA  =
+            "src/test/resources/schemas/notes_list_schema.json";
 
     public void deleteAllNotesViaAPI() {
-        log.info("Initiating global API purge sequence to delete all active notes.");
+        log.info("Initiating global API purge sequence.");
 
         Response response = RestAssured.given()
                 .spec(requestSpec)
@@ -32,7 +45,7 @@ public class APITest extends BaseAPI {
 
         if (response.getStatusCode() == 200) {
             java.util.List<String> noteIds = response.jsonPath().getList("data.id");
-            log.info("Found " + noteIds.size() + " active note(s) slated for erasure.");
+            log.info("Found " + noteIds.size() + " active note(s) for erasure.");
 
             for (String id : noteIds) {
                 RestAssured.given()
@@ -42,9 +55,9 @@ public class APITest extends BaseAPI {
                         .then()
                         .statusCode(200);
             }
-            log.info("Global API purge complete. Dashboard workspace layer is completely clear.");
+            log.info("API purge complete.");
         } else {
-            log.error("Failed to fetch notes list for cleanup. Status code: " + response.getStatusCode());
+            log.error("Failed to fetch notes for cleanup. Status: " + response.getStatusCode());
         }
     }
 
@@ -57,7 +70,8 @@ public class APITest extends BaseAPI {
 
     @DataProvider(name = "APIExcelDataProvider", parallel = false)
     public Object[][] getAPITestDataFromExcel() {
-        String excelPath = System.getProperty("user.dir") + "/src/test/resources/TestData.xlsx";
+        String excelPath = ConfigReader.getProperty("excel.testdata.path")
+                .replace("./", System.getProperty("user.dir") + "/");
         return ExcelReader.getSheetData(excelPath, "APITest");
     }
 
@@ -70,21 +84,19 @@ public class APITest extends BaseAPI {
 
         log.info("▶ Executing API Layer Step: " + testCaseId + " -> " + description);
 
-        // Safe Numeric Parsing Guard for expected HTTP Status Codes
         int expectedStatusCode = 200;
         if (expectedStatus.matches("\\d+(\\.\\d+)?")) {
             expectedStatusCode = (int) Double.parseDouble(expectedStatus);
         }
 
-        // Initialize shared mapping payloads conforming to uniform schema layouts
         Map<String, String> notePayload = new HashMap<>();
         if (uiCategory != null && !uiCategory.equals("-")) notePayload.put("category", uiCategory);
-        if (uiTitle != null && !uiTitle.equals("-")) notePayload.put("title", uiTitle);
+        if (uiTitle    != null && !uiTitle.equals("-"))    notePayload.put("title", uiTitle);
         if (uiDescription != null && !uiDescription.equals("-")) notePayload.put("description", uiDescription);
 
         switch (testCaseId) {
 
-            // TC-API-01: Validate POST /login yields authentication tokens
+            // TC-API-01: POST /login — with JSON schema validation
             case "TC-API-01":
                 Map<String, String> loginPayload = new HashMap<>();
                 loginPayload.put("email", username);
@@ -95,13 +107,18 @@ public class APITest extends BaseAPI {
                         .body(loginPayload)
                         .post("/users/login");
 
-                // Check assertions and enforce execution timers under 2 seconds
-                loginResponse.then().time(Matchers.lessThan(PERFORMANCE_SLA_MS));
-                Assert.assertEquals(loginResponse.getStatusCode(), expectedStatusCode, "Login failed.");
-                Assert.assertNotNull(loginResponse.jsonPath().getString("data.token"), "Authentication token missing.");
+                loginResponse.then()
+                        .time(Matchers.lessThan(PERFORMANCE_SLA_MS))
+                        .statusCode(expectedStatusCode)
+                        // ✅ JSON Schema Validation
+                        .body(JsonSchemaValidator.matchesJsonSchema(new File(LOGIN_SCHEMA)));
+
+                Assert.assertNotNull(
+                        loginResponse.jsonPath().getString("data.token"),
+                        "Authentication token missing.");
                 break;
 
-            // TC-API-02: Validate POST /notes generates entry records
+            // TC-API-02: POST /notes
             case "TC-API-02":
                 Response createResponse = RestAssured.given()
                         .spec(requestSpec)
@@ -111,10 +128,12 @@ public class APITest extends BaseAPI {
 
                 createResponse.then().time(Matchers.lessThan(PERFORMANCE_SLA_MS));
                 Assert.assertEquals(createResponse.getStatusCode(), 200, "Note creation failed.");
-                Assert.assertNotNull(createResponse.jsonPath().getString("data.id"), "Note ID missing from response context.");
+                Assert.assertNotNull(
+                        createResponse.jsonPath().getString("data.id"),
+                        "Note ID missing.");
                 break;
 
-            // TC-API-03: Validate GET /notes returns collection matrices
+            // TC-API-03: GET /notes — with JSON schema validation
             case "TC-API-03":
                 RestAssured.given()
                         .spec(requestSpec)
@@ -123,19 +142,22 @@ public class APITest extends BaseAPI {
                         .then()
                         .statusCode(expectedStatusCode)
                         .time(Matchers.lessThan(PERFORMANCE_SLA_MS))
-                        .body("message", Matchers.containsString("Notes successfully retrieved"));
+                        .body("message", Matchers.containsString("Notes successfully retrieved"))
+                        // ✅ JSON Schema Validation
+                        .body(JsonSchemaValidator.matchesJsonSchema(new File(NOTES_SCHEMA)));
                 break;
 
-            // TC-API-04: Validate downstream availability via background injection flows
+            // TC-API-04: Inject note and verify via GET
             case "TC-API-04":
-                log.info("Executing TC-API-04: Injecting test note via background REST request to verify retrieval pipelines.");
+                log.info("TC-API-04: Injecting test note via background REST.");
 
                 Response directCreateResp = RestAssured.given()
                         .spec(requestSpec)
                         .header("x-auth-token", authToken)
                         .body(notePayload)
                         .post("/notes");
-                Assert.assertEquals(directCreateResp.getStatusCode(), 200, "API-driven pre-requisite note creation failed.");
+                Assert.assertEquals(directCreateResp.getStatusCode(), 200,
+                        "Pre-requisite note creation failed.");
 
                 Response listResponse = RestAssured.given()
                         .spec(requestSpec)
@@ -143,11 +165,12 @@ public class APITest extends BaseAPI {
                         .get("/notes");
 
                 listResponse.then().time(Matchers.lessThan(PERFORMANCE_SLA_MS));
-                String backendTitle = listResponse.jsonPath().getString("data.find { it.title.trim() == '" + uiTitle.trim() + "' }.title");
-                Assert.assertNotNull(backendTitle, "Cross-Layer validation failed: Note is missing from API database cluster registry.");
+                String backendTitle = listResponse.jsonPath()
+                        .getString("data.find { it.title.trim() == '" + uiTitle.trim() + "' }.title");
+                Assert.assertNotNull(backendTitle, "Note missing from API response.");
                 break;
 
-            // TC-API-05: Validate DELETE /notes discards active elements smoothly
+            // TC-API-05: DELETE /notes
             case "TC-API-05":
                 Response prepNoteResp = RestAssured.given()
                         .spec(requestSpec)
@@ -163,10 +186,12 @@ public class APITest extends BaseAPI {
 
                 deleteResp.then().time(Matchers.lessThan(PERFORMANCE_SLA_MS));
                 int actualDeleteCode = deleteResp.getStatusCode();
-                Assert.assertTrue(actualDeleteCode == 200 || actualDeleteCode == 204, "Deletion failed. Code received: " + actualDeleteCode);
+                Assert.assertTrue(
+                        actualDeleteCode == 200 || actualDeleteCode == 204,
+                        "Deletion failed. Code: " + actualDeleteCode);
                 break;
 
-            // TC-API-06: Explicit Performance SLA Validation Checkpoint Matrix
+            // TC-API-06: Performance SLA checkpoint
             case "TC-API-06":
                 Response perfResponse = RestAssured.given()
                         .spec(requestSpec)
@@ -174,14 +199,13 @@ public class APITest extends BaseAPI {
                         .get("/notes");
 
                 long responseTimeMs = perfResponse.getTimeIn(TimeUnit.MILLISECONDS);
-                log.info("Measured operational round-trip response performance time: " + responseTimeMs + " ms");
-
+                log.info("Response time: " + responseTimeMs + " ms");
                 Assert.assertTrue(responseTimeMs < PERFORMANCE_SLA_MS,
-                        "Performance SLA Regression: Endpoint roundtrip exceeded maximum limit! Actual: " + responseTimeMs + "ms");
+                        "SLA breach! Actual: " + responseTimeMs + "ms");
                 break;
 
             default:
-                Assert.fail("Automation Engine Alert: Unmapped execution path profile for API Target Case ID: " + testCaseId);
+                Assert.fail("Unmapped test case ID: " + testCaseId);
         }
 
         log.info("✔ Passed: " + testCaseId);

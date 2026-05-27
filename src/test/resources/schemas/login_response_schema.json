@@ -1,0 +1,21 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Login Response Schema",
+  "type": "object",
+  "required": ["success", "status", "message", "data"],
+  "properties": {
+    "success": { "type": "boolean" },
+    "status":  { "type": "integer" },
+    "message": { "type": "string" },
+    "data": {
+      "type": "object",
+      "required": ["id", "name", "email", "token"],
+      "properties": {
+        "id":    { "type": "string" },
+        "name":  { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "token": { "type": "string" }
+      }
+    }
+  }
+}

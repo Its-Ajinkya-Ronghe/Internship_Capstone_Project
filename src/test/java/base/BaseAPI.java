@@ -1,5 +1,6 @@
 package base;
 
+import com.expandtesting.notes.utils.ConfigReader;
 import io.restassured.RestAssured;
 import io.restassured.builder.RequestSpecBuilder;
 import io.restassured.builder.ResponseSpecBuilder;
@@ -16,30 +17,36 @@ public class BaseAPI {
     public static String authToken = "";
 
     public static void initializeAPI() {
-        RestAssured.baseURI = "https://practice.expandtesting.com/notes/api";
+        RestAssured.baseURI = ConfigReader.getProperty("api.base.url");
 
-        // 🛠️ NETWORK SESSIONS TIMEOUT BREAKER MATRIX
-        // Prevents RestAssured from waiting indefinitely if connection packets drop
+        long slaMs = Long.parseLong(ConfigReader.getProperty("api.max.response.time.ms"));
+
         RestAssuredConfig timeoutConfig = RestAssuredConfig.config()
                 .httpClient(HttpClientConfig.httpClientConfig()
-                        .setParam("http.connection.timeout", 10000)     // 10s Connection Timeout
-                        .setParam("http.socket.timeout", 10000));       // 10s Data Socket Timeout
+                        .setParam("http.connection.timeout", 10000)
+                        .setParam("http.socket.timeout", 10000));
 
         requestSpec = new RequestSpecBuilder()
                 .setContentType(ContentType.JSON)
                 .addHeader("Accept", "application/json")
-                .setConfig(timeoutConfig) // Attaching timeouts globally
+                .setConfig(timeoutConfig)
                 .build();
 
         responseSpec = new ResponseSpecBuilder()
-                .expectResponseTime(Matchers.lessThan(2000L)) // FR-08: Performance assertion < 2s
+                .expectResponseTime(Matchers.lessThan(slaMs)) // FR-08: driven by config
                 .build();
     }
 
     public static void loginAndSetToken() {
         if (authToken.isEmpty()) {
             initializeAPI();
-            String loginPayload = "{\"email\":\"rongheajinkya72@gmail.com\",\"password\":\"ajinkya72\"}";
+
+            String email    = ConfigReader.getProperty("default.username");
+            String password = ConfigReader.getProperty("default.password");
+
+            String loginPayload = String.format(
+                    "{\"email\":\"%s\",\"password\":\"%s\"}", email, password
+            );
 
             authToken = RestAssured.given()
                     .spec(requestSpec)

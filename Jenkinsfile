@@ -7,30 +7,46 @@ pipeline {
     }
 
     stages {
-        // Stage removed duplication: Declarative pipelines auto-checkout scm at the start of node allocation
-
-        stage('Execute Parallel Regression Suite') {
+        // 🐳 STAGE 1: Spin up infrastructure before running any code compilation
+        stage('Start Selenium Grid') {
             steps {
-                echo "Launching Capstone Independent Validation Framework..."
-                // Runs TestNG suites via Maven, ignoring hard failures to allow reporting steps to process
-                bat 'mvn clean test -DsuiteXmlFile=testng.xml -Dmaven.test.failure.ignore=true'
+                echo "Starting Selenium Grid Hub and Node containers via Docker Compose..."
+                bat 'docker-compose down' // Guard: Clear any lingering dead containers first
+                bat 'docker-compose up -d'
+                echo "Waiting for Grid infrastructure matrix to settle..."
+                bat 'ping -n 15 127.0.0.1 > nul' // 15s safe spin-up delay
             }
         }
 
+        // 🚀 STAGE 2: Compile and execute the full test framework on the live Grid
+        stage('Execute Parallel Regression Suite on Grid') {
+            steps {
+                echo "Launching Capstone Independent Validation Framework against Selenium Grid..."
+                // 🌟 FIXED: Added -U to force-download missing WebDriverManager jars and resolve the compilation failure
+                bat 'mvn clean test -U -DsuiteXmlFile=testng.xml -DuseGrid=true -DgridUrl=http://localhost:4444/wd/hub -Dmaven.test.failure.ignore=true'
+            }
+        }
+
+        // 🛑 STAGE 3: Tear down container network safely right after tests complete
+        stage('Stop Selenium Grid') {
+            steps {
+                echo "Tearing down Docker environment..."
+                bat 'docker-compose down'
+            }
+        }
+
+        // 📊 STAGE 4: Run the flawless backend performance load tests
         stage('Performance Load Testing (JMeter)') {
             steps {
                 echo "🚀 Starting Apache JMeter Non-GUI Backend Load Execution..."
 
-                // 🛠️ Pre-execution Workspace Guard: Clean up old run log directories safely
                 bat '''
                 if exist performance-testing\\results rmdir /s /q performance-testing\\results
                 mkdir performance-testing\\results
                 '''
 
-                // 🏃 Execute JMeter in Non-GUI (CLI) mode to simulate concurrent stress profiles
                 bat 'jmeter -n -t performance-testing/NoteEngine_LoadSuite.jmx -l performance-testing/results/log.jtl -e -o performance-testing/results/dashboard-report'
 
-                // 📊 Archive and publish the interactive graphical load testing summary dashboard inside Jenkins
                 publishHTML([
                     allowMissing: false,
                     alwaysLinkToLastBuild: true,
@@ -47,11 +63,10 @@ pipeline {
         always {
             echo "Archiving test reporting assets and compiling telemetry artifacts..."
 
-            // 🔓 FIX: Native Jenkins script bypass block for Content Security Policy (CSP) styling
-            // This runs natively in the post-action environment without tripping the groovy sandbox rules!
-            bat 'set JAVA_OPTS="-Dhudson.model.DirectoryBrowserSupport.CSP="'
+            // Clean teardown backup to ensure no ports stick open if a test fails early
+            bat 'docker-compose down'
 
-            // Compiles Allure results from Maven execution cycles
+            // Compiles Allure results from the execution cycles
             allure includeProperties: false,
                    jdk: '',
                    results: [[path: 'target/allure-results']]

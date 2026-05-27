@@ -1,16 +1,14 @@
 package base;
 
-import org.openqa.selenium.PageLoadStrategy;
+import com.expandtesting.notes.drivers.DriverFactory;
+import com.expandtesting.notes.utils.ConfigReader;
 import org.openqa.selenium.WebDriver;
-import org.openqa.selenium.chrome.ChromeDriver;
-import org.openqa.selenium.chrome.ChromeOptions;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import java.time.Duration;
 
 public class BaseTest {
 
-    // ThreadLocal container preserves context isolation for concurrent TestNG thread executions
     private static final ThreadLocal<WebDriver> driver = new ThreadLocal<>();
 
     public WebDriver getDriver() {
@@ -19,37 +17,31 @@ public class BaseTest {
 
     @BeforeMethod
     public void setUp() {
-        ChromeOptions options = new ChromeOptions();
-        options.addArguments("--start-maximized");
-        options.addArguments("--disable-notifications");
+        boolean isHeadless  = System.getenv("JENKINS_HOME") != null;
 
-        // Prevents renderer from being killed on slow networks or high CPU parallel loads
-        options.addArguments("--disable-renderer-backgrounding");
-        options.addArguments("--disable-backgrounding-occluded-windows");
-        options.addArguments("--no-sandbox");
-        options.addArguments("--disable-dev-shm-usage");
-        options.addArguments("--disable-gpu");
+        // If -DuseGrid=true is passed → connect to Selenium Grid
+        // Otherwise → run locally as before
+        boolean useGrid = Boolean.parseBoolean(
+                System.getProperty("useGrid", "false")
+        );
 
-        // 🌟 THE CRITICAL STABILITY FIX: Switch page load strategy to EAGER
-        // Releases the blocking thread the millisecond the core HTML DOM interactive layer mounts,
-        // stopping Chrome from hanging during heavy concurrent navigate().refresh() cycles.
-        options.setPageLoadStrategy(PageLoadStrategy.EAGER);
+        WebDriver rawDriver;
 
-        // 🌟 CI/CD AGENT CONTROLLER: Automatic Headless fallback shield
-        // Runs headlessly on your Jenkins server agent while keeping browsers visible during local IntelliJ debugging.
-        if (System.getenv("JENKINS_HOME") != null) {
-            options.addArguments("--headless=new");
+        if (useGrid) {
+            String gridUrl = System.getProperty(
+                    "gridUrl",
+                    ConfigReader.getProperty("selenium.grid.url")
+            );
+            rawDriver = DriverFactory.createRemoteDriver(gridUrl);
+        } else {
+            rawDriver = DriverFactory.createChromeDriver(isHeadless);
         }
 
-        WebDriver rawDriver = new ChromeDriver(options);
-
-        // No implicitWait — strictly keeps architecture separate from your FluentWait structures inside WaitUtils
-        // Managed fluid timeouts adapted to slow remote server load spikes
         rawDriver.manage().timeouts().pageLoadTimeout(Duration.ofSeconds(45));
         rawDriver.manage().timeouts().scriptTimeout(Duration.ofSeconds(30));
 
         driver.set(rawDriver);
-        getDriver().get("https://practice.expandtesting.com/notes/app/login");
+        getDriver().get(ConfigReader.getProperty("ui.base.url"));
     }
 
     @AfterMethod
@@ -58,7 +50,6 @@ public class BaseTest {
             try {
                 getDriver().quit();
             } finally {
-                // Critical clean-up loop: Frees memory and drops thread slots to avoid cross-contamination
                 driver.remove();
             }
         }

@@ -83,7 +83,6 @@ public class E2ETest extends BaseTest {
                 break;
 
             // TC-E2E-02: Reverse Dynamic Sync Execution (API Deletion -> UI Ghost Data Check) [cite: 28]
-            case "Topic-E2E-02":
             case "TC-E2E-02":
                 String notePayload = String.format("{\"title\":\"%s\",\"description\":\"%s\",\"category\":\"%s\"}",
                         uiTitle, uiDescription, uiCategory);

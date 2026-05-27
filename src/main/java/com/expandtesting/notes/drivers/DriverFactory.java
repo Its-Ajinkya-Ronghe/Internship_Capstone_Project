@@ -7,27 +7,47 @@ import org.openqa.selenium.PageLoadStrategy;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.chrome.ChromeDriver;
 import org.openqa.selenium.chrome.ChromeOptions;
+import org.openqa.selenium.remote.RemoteWebDriver;
+import java.net.MalformedURLException;
+import java.net.URL;
 
-/**
- * DriverFactory — Centralized WebDriver creation with WebDriverManager auto-setup.
- * Satisfies the /drivers module requirement from Section 2.1.
- */
 public class DriverFactory {
 
     private static final Logger log = LogManager.getLogger(DriverFactory.class);
 
-    private DriverFactory() {
-        // Utility class — no instantiation
+    private DriverFactory() {}
+
+    /**
+     * Local Chrome — used during normal local/CI runs.
+     */
+    public static WebDriver createChromeDriver(boolean headless) {
+        log.info("DriverFactory: Creating local ChromeDriver.");
+        WebDriverManager.chromedriver().setup();
+
+        ChromeOptions options = buildChromeOptions(headless);
+        return new ChromeDriver(options);
     }
 
     /**
-     * Creates and returns a fully configured ChromeDriver instance.
-     * WebDriverManager automatically downloads the correct chromedriver binary.
+     * Remote Chrome via Selenium Grid — used when -DuseGrid=true is passed.
      */
-    public static WebDriver createChromeDriver(boolean headless) {
-        log.info("DriverFactory: Setting up ChromeDriver via WebDriverManager.");
-        WebDriverManager.chromedriver().setup();
+    public static WebDriver createRemoteDriver(String gridUrl) {
+        log.info("DriverFactory: Connecting to Selenium Grid at: {}", gridUrl);
 
+        ChromeOptions options = buildChromeOptions(true); // always headless on Grid
+
+        try {
+            return new RemoteWebDriver(new URL(gridUrl), options);
+        } catch (MalformedURLException e) {
+            log.error("Invalid Selenium Grid URL: {}", gridUrl);
+            throw new RuntimeException("Selenium Grid URL is malformed: " + gridUrl, e);
+        }
+    }
+
+    /**
+     * Shared Chrome options used by both local and remote drivers.
+     */
+    private static ChromeOptions buildChromeOptions(boolean headless) {
         ChromeOptions options = new ChromeOptions();
         options.addArguments("--start-maximized");
         options.addArguments("--disable-notifications");
@@ -39,11 +59,10 @@ public class DriverFactory {
         options.setPageLoadStrategy(PageLoadStrategy.EAGER);
 
         if (headless) {
-            log.info("DriverFactory: Headless mode enabled (CI/CD environment detected).");
+            log.info("DriverFactory: Headless mode ON.");
             options.addArguments("--headless=new");
         }
 
-        log.info("DriverFactory: ChromeDriver instance created successfully.");
-        return new ChromeDriver(options);
+        return options;
     }
 }

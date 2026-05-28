@@ -5,7 +5,6 @@ import com.expandtesting.notes.pages.DashboardPage;
 import com.expandtesting.notes.pages.LoginPage;
 import com.expandtesting.notes.pages.NoteModalPage;
 import com.expandtesting.notes.utils.ExcelReader;
-import com.expandtesting.notes.utils.McpClientManager; // 🌟 Added MCP Client Infrastructure
 import com.expandtesting.notes.utils.WaitUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -14,12 +13,10 @@ import org.openqa.selenium.TimeoutException;
 import org.testng.Assert;
 import org.testng.annotations.DataProvider;
 import org.testng.annotations.Test;
-import java.util.HashMap;
-import java.util.Map;
 
 /**
- * UITest — Data-driven UI functional validation test suite[cite: 19, 57].
- * Fully optimized to implement Section 3.4 Model Context Protocol mappings.
+ * UITest — Data-driven UI functional validation test suite.
+ * Fully migrated to native page object invocation loops for robust execution tracking.
  */
 public class UITest extends BaseTest {
 
@@ -43,24 +40,16 @@ public class UITest extends BaseTest {
 
         log.info("▶ Executing UI Layer: {} — {}", testCaseId, description);
 
-        // 🌟 SECTION 3.4: Instantiate the MCP Capability & Routing Controller
-        McpClientManager mcp = new McpClientManager(getDriver());
-        mcp.discoverMcpCapabilities();
-
+        LoginPage loginPage         = new LoginPage(getDriver());
         NoteModalPage noteModal     = new NoteModalPage(getDriver());
         DashboardPage dashboardPage = new DashboardPage(getDriver());
 
-        // 🤖 MCP ALTERATION: Bundle credential arguments into standard protocol schemas
-        Map<String, String> loginArgs = new HashMap<>();
-        loginArgs.put("email", username);
-        loginArgs.put("password", password);
-
-        // Router hands control to underlying Selenium + Agentic Self-Healing page objects
-        mcp.processMcpExecution("mcp_login_action", loginArgs);
+        // 🌟 FIXED: Standard native UI authentication call (Bypassed the hardcoded simulation block)
+        loginPage.login(username, password);
 
         switch (testCaseId) {
 
-            // TC-UI-01: Valid login → URL must contain "app" [cite: 28]
+            // TC-UI-01: Valid login → URL must contain "app"
             case "TC-UI-01":
                 WaitUtils.waitForUrlToContain(getDriver(), "app", 15);
                 Assert.assertTrue(
@@ -69,9 +58,8 @@ public class UITest extends BaseTest {
                 );
                 break;
 
-            // TC-UI-02: Invalid credentials → error message mismatch check [cite: 28]
+            // TC-UI-02: Invalid credentials → error message mismatch check
             case "TC-UI-02":
-                LoginPage loginPage = new LoginPage(getDriver());
                 Assert.assertEquals(
                         loginPage.getErrorMessageText().trim(),
                         expectedStatus.trim(),
@@ -79,13 +67,13 @@ public class UITest extends BaseTest {
                 );
                 break;
 
-            // TC-UI-03 / TC-UI-05: Create note via MCP → card visible after safe refresh [cite: 28]
+            // TC-UI-03 / TC-UI-05: Create note → card visible after safe refresh
             case "TC-UI-03":
             case "TC-UI-05":
                 waitForDashboardReady();
 
-                // 🤖 MCP ALTERATION: Route note data via protocol payloads
-                mcp.processMcpExecution("mcp_create_note_action", buildNoteArgs(uiCategory, uiTitle, uiDescription));
+                // 🌟 FIXED: Native page object execution block
+                noteModal.createNewNote(uiCategory, uiTitle, uiDescription);
 
                 safeRefresh();
                 waitForDashboardReady();
@@ -95,10 +83,10 @@ public class UITest extends BaseTest {
                 );
                 break;
 
-            // TC-UI-04: Create note via MCP → confirmation text page validation [cite: 28]
+            // TC-UI-04: Create note → confirmation text page validation
             case "TC-UI-04":
                 waitForDashboardReady();
-                mcp.processMcpExecution("mcp_create_note_action", buildNoteArgs("Home", uiTitle, uiDescription));
+                noteModal.createNewNote("Home", uiTitle, uiDescription);
 
                 Assert.assertTrue(
                         getDriver().getPageSource().contains(expectedStatus),
@@ -106,10 +94,10 @@ public class UITest extends BaseTest {
                 );
                 break;
 
-            // TC-UI-06: Create via MCP → edit → verify modification matches [cite: 28]
+            // TC-UI-06: Create → edit → verify modification matches
             case "TC-UI-06":
                 waitForDashboardReady();
-                mcp.processMcpExecution("mcp_create_note_action", buildNoteArgs(uiCategory, uiTitle, uiDescription));
+                noteModal.createNewNote(uiCategory, uiTitle, uiDescription);
 
                 String modifiedTitle = (uiTitle + " - Updated");
                 dashboardPage.clickEditNoteIcon(uiTitle);
@@ -121,11 +109,9 @@ public class UITest extends BaseTest {
                 );
                 break;
 
-            // TC-UI-07: Create via MCP → delete → card disappearance confirmation [cite: 28]
+            // TC-UI-07: Create → delete → card disappearance confirmation
             case "TC-UI-07":
                 waitForDashboardReady();
-
-                // Pure, native UI creation action flow sequence
                 noteModal.createNewNote(uiCategory, uiTitle, uiDescription);
 
                 safeRefresh();
@@ -136,7 +122,6 @@ public class UITest extends BaseTest {
                         "Pre-condition failure: Note '" + uiTitle + "' not found before delete."
                 );
 
-                // Triggers the bulletproof fixed native UI lookup sequence
                 dashboardPage.clickDeleteNoteIcon(uiTitle);
 
                 Assert.assertTrue(
@@ -144,10 +129,12 @@ public class UITest extends BaseTest {
                         "FR-07 Failure: Note '" + uiTitle + "' still visible after deletion."
                 );
                 break;
-            // TC-UI-08: Create via MCP → filter layout by category [cite: 28]
+
+            // TC-UI-08: Create → filter layout by category
             case "TC-UI-08":
                 waitForDashboardReady();
-                mcp.processMcpExecution("mcp_create_note_action", buildNoteArgs(uiCategory, uiTitle, uiDescription));
+                noteModal.createNewNote(uiCategory, uiTitle, uiDescription);
+
                 safeRefresh();
                 waitForDashboardReady();
 
@@ -169,17 +156,6 @@ public class UITest extends BaseTest {
     // -----------------------------------------------------------------------
     // Private Helpers
     // -----------------------------------------------------------------------
-
-    /**
-     * Helper to wrap note parameters neatly into an MCP protocol data map string structure.
-     */
-    private Map<String, String> buildNoteArgs(String category, String title, String description) {
-        Map<String, String> noteArgs = new HashMap<>();
-        noteArgs.put("category", category);
-        noteArgs.put("title", title);
-        noteArgs.put("description", description);
-        return noteArgs;
-    }
 
     /**
      * Two-stage dashboard readiness verification.
